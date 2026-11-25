@@ -580,6 +580,30 @@
   .intro.playing .to, .intro.playing .tap { opacity: 0; animation: none; transition: opacity .35s ease; }
   /* 편지 제목과 본문 제목 글꼴·굵기·자간 일치 */
   .e-title, .title-fly, .hero h1 { font-family: "Noto Serif KR", var(--serif); font-weight: 500; letter-spacing: .14em; }
+
+  /* ===== 상자·버튼 통일: 같은 모서리·테두리·배경·높이 ===== */
+  :root { --box-r: 10px; --box-bd: 1px solid rgba(58,42,31,.28); --box-bg: rgba(255,250,240,.55); --btn-h: 46px; }
+  .btn, .btn.primary {
+    height: var(--btn-h); padding: 0 16px; border-radius: var(--box-r); border: var(--box-bd);
+    background: var(--box-bg); color: var(--ink); font: 400 14px var(--serif);
+    display: inline-flex; align-items: center; justify-content: center; box-shadow: none;
+  }
+  .btn.primary { background: #b3202c; border-color: #b3202c; color: #fbf3e6; font-weight: 700; }
+  .btns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 20px; }
+  .closing .btns { grid-template-columns: 1fr; }
+  .fee, .account { margin: 0; }
+  .fee { display: block; margin-bottom: 8px; }
+  .fee div, .account {
+    max-width: none; border-radius: var(--box-r); border: var(--box-bd); background: var(--box-bg);
+    box-shadow: none; padding: 0 16px; min-height: 64px;
+  }
+  .fee div { display: flex; align-items: center; justify-content: center; }
+  .fee b { font-size: 22px; }
+  .account { display: flex; align-items: center; justify-content: space-between; }
+  .account .btn { height: 36px; padding: 0 14px; }
+  .nick-form .btn { width: 100%; }
+  .nick-board { border-radius: var(--box-r); border: var(--box-bd); background: var(--box-bg); }
+  .account .btn { border: var(--box-bd); background: rgba(255,250,240,.8); }
 </style>
 </head>
 <body class="locked">
