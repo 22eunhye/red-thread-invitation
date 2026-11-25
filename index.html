@@ -572,6 +572,14 @@
   .e-rope .r-base { stroke: #7e1320; stroke-width: 13; }
   .e-rope .r-twist { stroke: #b6394a; stroke-width: 3.2; stroke-linecap: round; opacity: .9; }
   .e-rope .r-twist2 { stroke: #560a13; stroke-width: 1.6; stroke-linecap: round; opacity: .55; }
+
+  /* 첫 화면 간격: 문구와 봉투 사이 48px */
+  .intro .to { margin-bottom: 0; }
+  .e-stage { margin-top: 48px; }
+  .tap { margin-top: 40px; }
+  .intro.playing .to, .intro.playing .tap { opacity: 0; animation: none; transition: opacity .35s ease; }
+  /* 편지 제목과 본문 제목 글꼴·굵기·자간 일치 */
+  .e-title, .title-fly, .hero h1 { font-family: "Noto Serif KR", var(--serif); font-weight: 500; letter-spacing: .14em; }
 </style>
 </head>
 <body class="locked">
@@ -611,7 +619,7 @@
       <svg class="e-rope" id="rope" viewBox="0 0 1000 654" aria-hidden="true"></svg>
     </div>
   </div>
-  <p class="tap">봉투를 눌러 열어보세요</p>
+  <p class="tap">봉투를 눌러 붉은 실을 풀어보세요</p>
 </div>
 
 
@@ -892,12 +900,23 @@ loadNicknames();
 
 /* ===== 끈(로프) 모델: 곡선을 점으로 들고 매 프레임 변형 ===== */
 const Rope = (() => {
-  const K = [497, 386];                     // 매듭 중심 (봉투 1000×654 좌표)
-  const HY = 386, VX = 497;
-  const add = (a, b) => [a[0] + b[0], a[1] + b[1]];
-  const lerp = (a, b, t) => a + (b - a) * t;
+  /* 봉투 기준 좌표 1000 × 654. 매듭 중심은 가로 49.7%, 세로 59%.
+     전체 진행률 0~1을 기준으로 각 동작의 시작·끝을 잡음 → TOTAL만 바꾸면 전부 같이 늘어나고 줄어듦 */
+  const TOTAL = 7200;
+  const W = {
+    tension: [0, .085],        // 0~0.6초   느슨한 끝이 펴짐
+    lead:    [0, .34],         // 끈 끝이 먼저 움직임
+    pull:    [.055, .375],     // 0.4~2.7초 고리가 좁아지며 매듭을 통과
+    openL:   [.19, .42],       // 반대쪽 고리는 늦게 힘을 잃고 펴짐
+    knot:    [.25, .40],       // 중앙 얽힘이 느슨해짐
+    slack:   [.32, .60],       // 2.3~4.3초 감긴 끈의 장력이 풀림
+    flow:    [.50, 1],         // 3.6~7.2초 끝을 따라 실 전체가 빠져나감
+  };
+  const K = [497, 386], HY = 386, VX = 497;
   const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
-  // Catmull-Rom으로 점들을 부드러운 곡선으로
+  const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+  const win = (P, w) => Math.min(1, Math.max(0, (P - w[0]) / (w[1] - w[0])));
+  const ease = t => t <= 0 ? 0 : t >= 1 ? 1 : .5 - .5 * Math.cos(Math.PI * t);
   function spline(pts, n = 14) {
     const out = [];
     for (let i = 0; i < pts.length - 1; i++) {
@@ -910,120 +929,235 @@ const Rope = (() => {
     out.push(pts[pts.length - 1]);
     return out;
   }
-  const len = pts => pts.reduce((s, p, i) => i ? s + dist(p, pts[i - 1]) : 0, 0);
-  // 사진에서 따온 리본 모양
-  const loopR = spline([K, [555, 349], [618, 318], [652, 349], [635, 390], [576, 404], K]);
-  const loopL = spline([K, [441, 349], [396, 325], [348, 342], [348, 377], [369, 404], [417, 404], K]);
-  const tailR = spline([K, [528, 432], [576, 488], [614, 530]]);
-  const tailL = spline([K, [459, 432], [424, 488], [395, 540]]);
-  const knot  = spline([[486, 372], [510, 370], [514, 392], [492, 400], [484, 384]], 8);
-  const LR = len(loopR), LL = len(loopL);
-  const dirOf = t => { const a = t[t.length - 2], b = t[t.length - 1], d = dist(a, b); return [(b[0] - a[0]) / d, (b[1] - a[1]) / d]; };
-  const DR = dirOf(tailR), DL = dirOf(tailL);
-
-  // 고리는 매듭 쪽으로 오므라들고, 줄어든 길이만큼 끈 끝이 바깥으로 나옴
-  function strand(loop, tail, D, Lloop, p, relax) {
-    const s = 1 - p;
-    const lp = loop.map(q => [K[0] + (q[0] - K[0]) * s, K[1] + (q[1] - K[1]) * s]);
-    const extra = Lloop * p;
-    const tp = tail.slice();
-    const end = tail[tail.length - 1];
-    const steps = Math.max(1, Math.round(extra / 12));
-    for (let i = 1; i <= steps; i++) {
-      const e = extra * i / steps;
-      const sag = relax * e * e / 2600;                           // 실의 무게로 아주 살짝 처짐
-      tp.push([end[0] + D[0] * e - relax * D[1] * e * .08, end[1] + D[1] * e + sag]);
+  function resample(pts, n) {
+    const L = [0]; for (let i = 1; i < pts.length; i++) L.push(L[i - 1] + dist(pts[i], pts[i - 1]));
+    const total = L[L.length - 1], out = []; let j = 1;
+    for (let i = 0; i < n; i++) {
+      const target = total * i / (n - 1);
+      while (j < pts.length - 1 && L[j] < target) j++;
+      out.push(mix(pts[j - 1], pts[j], (target - L[j - 1]) / ((L[j] - L[j - 1]) || 1)));
     }
-    return s > .002 ? lp.concat(tp.slice(1)) : tp;
+    return out;
   }
-  // 세 점을 지나는 완만한 곡선(가로·세로 끈)
-  function band(a, m, b, n = 40) {
-    const out = [];
+  const length = pts => pts.reduce((s, p, i) => i ? s + dist(p, pts[i - 1]) : 0, 0);
+  function from(pts, a) {
+    let acc = 0;
+    for (let i = 1; i < pts.length; i++) {
+      const seg = dist(pts[i], pts[i - 1]);
+      if (acc + seg >= a) return [mix(pts[i - 1], pts[i], (a - acc) / (seg || 1))].concat(pts.slice(i));
+      acc += seg;
+    }
+    return [pts[pts.length - 1]];
+  }
+  const N = 70;
+  const loopR = resample(spline([K, [555, 349], [618, 318], [652, 349], [635, 390], [576, 404], K]), N);
+  const loopL = resample(spline([K, [441, 349], [396, 325], [348, 342], [348, 377], [369, 404], [417, 404], K]), N);
+  const tailR = resample(spline([K, [528, 432], [576, 488], [614, 530]]), 30);
+  const tailL = resample(spline([K, [459, 432], [424, 488], [395, 540]]), 30);
+  const knot  = resample(spline([[484, 384], [488, 371], [510, 370], [514, 392], [492, 400], [486, 390]], 8), 24);
+  const LR = length(loopR), LL = length(loopL), LTL = length(tailL), LK = length(knot);
+  const unit = (a, b) => { const d = dist(a, b); return [(b[0] - a[0]) / d, (b[1] - a[1]) / d]; };
+  const DR = unit(tailR[tailR.length - 2], tailR[tailR.length - 1]);
+  // 오른쪽 고리의 축(매듭→고리 중심)
+  const cR = loopR.reduce((c, q) => [c[0] + q[0] / N, c[1] + q[1] / N], [0, 0]);
+  const AX = unit(K, cR), PX = [-AX[1], AX[0]];
+
+  // 왼쪽: 꼬리+고리가 하나의 완만한 S자 가닥으로 펴진 모양 (끝 → 매듭 순서)
+  const LTOT = LTL + LL;
+  const openL = resample(Array.from({ length: 60 }, (_, i) => {
+    const s = (1 - i / 59) * LTOT;                       // i=0 이 먼 끝
+    return [K[0] - .78 * s, K[1] + .30 * s + 16 * Math.sin(2 * Math.PI * s / LTOT)];
+  }), 30 + N - 1);
+  const knotOpen = resample(openL.slice(-12).reverse(), 24);   // 매듭은 왼쪽 가닥 위로 겹쳐 사라짐
+
+  /* 오른쪽 가닥 (매듭 → 끝). 고리는 당겨지는 쪽으로 기울고, 폭이 좁아지며 길쭉해지고,
+     고리 둘레를 따라 매듭 속으로 들어가 꼬리 쪽으로 이어져 나옴 (길이 보존) */
+  function strandR(P) {
+    const lead = ease(win(P, W.lead)), pull = ease(win(P, W.pull)), tight = ease(win(P, W.tension));
+    const straight = tailR.map((q, i) => mix(K, tailR[tailR.length - 1], i / (tailR.length - 1)));
+    const tail = tailR.map((q, i) => mix(q, straight[i], tight * .65));
+    const out = LR * pull + 22 * lead;
+    const end = tail[tail.length - 1], ext = [];
+    for (let e = 8; e <= out; e += 8) {
+      const taut = 1 - pull * .0;                           // 당겨지는 구간은 팽팽
+      ext.push([end[0] + DR[0] * e, end[1] + DR[1] * e + taut * e * e / 6000]);
+    }
+    if (pull >= .999) return tail.concat(ext);
+    const rest = from(loopR, LR * pull);
+    const tilt = .5 * pull;                                 // 당겨지는 방향으로 기울기(rad)
+    const ct = Math.cos(tilt), st = Math.sin(tilt);
+    const loop = [K].concat(rest).map(q => {
+      const dx = q[0] - K[0], dy = q[1] - K[1];
+      let a = dx * AX[0] + dy * AX[1], b = dx * PX[0] + dy * PX[1];
+      a *= 1 + .35 * Math.sin(Math.PI * pull) ;             // 길쭉해지고
+      b *= 1 - .7 * pull;                                   // 폭은 좁아짐
+      const x = a * AX[0] + b * PX[0], y = a * AX[1] + b * PX[1];
+      return [K[0] + x * ct - y * st, K[1] + x * st + y * ct];
+    });
+    return loop.concat(tail.slice(1), ext);
+  }
+  // 왼쪽 가닥 (끝 → 매듭). 매듭에 가까운 쪽부터 늦게, 끝쪽은 먼저 펴짐
+  function strandL(P) {
+    const o = win(P, W.openL);
+    const src = tailL.slice().reverse().concat(loopL.slice(1).reverse().slice(1)).concat([K]);
+    const base = resample(src, openL.length);
+    return base.map((q, i) => {
+      const lag = (i / (base.length - 1)) * .4;
+      return mix(q, openL[i], ease(Math.min(1, Math.max(0, (o - lag) / .6))));
+    });
+  }
+  function knotAt(P) {
+    const k = ease(win(P, W.knot));
+    const loosen = 1 + .35 * Math.sin(Math.PI * Math.min(1, k * 1.6));
+    return knot.map((q, i) => mix([K[0] + (q[0] - K[0]) * loosen, K[1] + (q[1] - K[1]) * loosen], knotOpen[i],
+                                  ease(Math.min(1, Math.max(0, k * 1.3 - (i / 23) * .3)))));
+  }
+  function quad(a, m, b, n = 50) {
+    const c = [2 * m[0] - (a[0] + b[0]) / 2, 2 * m[1] - (a[1] + b[1]) / 2], out = [];
     for (let i = 0; i <= n; i++) {
       const t = i / n;
-      const c = [2 * m[0] - (a[0] + b[0]) / 2, 2 * m[1] - (a[1] + b[1]) / 2];
       out.push([(1 - t) ** 2 * a[0] + 2 * (1 - t) * t * c[0] + t * t * b[0], (1 - t) ** 2 * a[1] + 2 * (1 - t) * t * c[1] + t * t * b[1]]);
     }
     return out;
   }
-  const d = pts => "M" + pts.map(p => p[0].toFixed(1) + " " + p[1].toFixed(1)).join("L");
-  const ease = t => t <= 0 ? 0 : t >= 1 ? 1 : .5 - .5 * Math.cos(Math.PI * t);      // 완만한 시작과 끝
-  const easeIn = t => t <= 0 ? 0 : t >= 1 ? 1 : 1 - Math.cos(Math.PI * t / 2);
-  const clamp = (t, a, b) => Math.min(1, Math.max(0, (t - a) / (b - a)));
 
-  let svg, parts = {};
-  function mount(el) {
-    svg = el;
-    ["H", "V", "B", "A", "C"].forEach(k => {
-      const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
-      ["r-base", "r-twist", "r-twist2"].forEach(c => {
-        const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
-        p.setAttribute("class", c); g.append(p);
+  /* 한 가닥의 경로(트랙): 당겨진 끝 → 오른쪽 가닥 → 매듭 → 가로끈 오른쪽 → (봉투 뒤) → 가로끈 왼쪽
+     → 세로끈 아래 → (봉투 뒤) → 세로끈 위 → 왼쪽 가닥 → 마지막 꼬리.
+     실은 이 경로를 따라 끝 쪽으로 미끄러지고, 끝 앞에는 화면 밖으로 이어지는 출구 경로가 붙음 */
+  let exitPts = null, exitLen = 0;
+  function buildExit(start) {
+    // 화면 밖까지: 실제 뷰포트 크기를 봉투 좌표로 환산
+    const r = svg.getBoundingClientRect(), u = 1000 / r.width;
+    const maxX = (innerWidth - r.left) * u + 120, maxY = (innerHeight - r.top) * u + 120;
+    const D = [.5, .866], Pp = [-D[1], D[0]], pts = [start];
+    for (let s = 6; ; s += 6) {
+      const q = [start[0] + D[0] * s + Pp[0] * 24 * Math.sin(s / 260), start[1] + D[1] * s + Pp[1] * 24 * Math.sin(s / 260)];
+      pts.push(q);
+      if (q[0] > maxX || q[1] > maxY) break;
+    }
+    exitPts = pts; exitLen = length(pts);
+  }
+  function track(P) {
+    const slack = ease(win(P, W.slack));
+    const drift = ease(win(P, [.26, .42]));
+    const J = [VX + 14 * slack + 10 * drift, HY + 20 * slack + 8 * drift];   // 매듭은 풀린 뒤 당기는 쪽으로 조금
+    const off = q => [q[0] + J[0] - K[0], q[1] + J[1] - K[1]];
+    const H = quad([-8, HY], J, [1008, HY]), V = quad([VX, -6], J, [VX, 660]);
+    const mid = n => Math.round(n / 2);
+    const segs = [
+      { pts: strandR(P).map(off).reverse(), kind: "over" },
+      { pts: H.slice(mid(H.length - 1)), kind: "under" },
+      { pts: [H[H.length - 1], H[0]], kind: "hidden", len: 70 },
+      { pts: H.slice(0, mid(H.length - 1) + 1), kind: "under" },
+      { pts: V.slice(mid(V.length - 1)), kind: "under" },
+      { pts: [V[V.length - 1], V[0]], kind: "hidden", len: 70 },
+      { pts: V.slice(0, mid(V.length - 1) + 1), kind: "under" },
+      { pts: strandL(P).map(off).reverse(), kind: "over" },
+    ];
+    // 누적 길이표
+    const nodes = []; let acc = 0;
+    segs.forEach(sg => {
+      const L = sg.len != null ? sg.len : length(sg.pts);
+      const total = length(sg.pts) || 1;
+      let g = 0;
+      sg.pts.forEach((q, i) => {
+        if (i) g += dist(q, sg.pts[i - 1]);
+        nodes.push({ q, s: acc + (sg.len != null ? (g / total) * L : g), kind: sg.kind });
       });
-      svg.append(g); parts[k] = g;
+      acc += L;
+    });
+    return { nodes, len: acc, J, off };
+  }
+  function at(tr, x) {                          // 트랙 좌표 x의 위치 (x<0 은 출구 경로)
+    if (x < 0) {
+      let d = -x, acc = 0;
+      for (let i = 1; i < exitPts.length; i++) {
+        const sg = dist(exitPts[i], exitPts[i - 1]);
+        if (acc + sg >= d) return { q: mix(exitPts[i - 1], exitPts[i], (d - acc) / sg), kind: "over" };
+        acc += sg;
+      }
+      return { q: exitPts[exitPts.length - 1], kind: "over" };
+    }
+    const ns = tr.nodes; let lo = 0, hi = ns.length - 1;
+    while (hi - lo > 1) { const m = (lo + hi) >> 1; ns[m].s <= x ? lo = m : hi = m; }
+    const A = ns[lo], B = ns[hi];
+    const kind = A.kind === "hidden" && B.kind === "hidden" ? "hidden" : (A.kind === "hidden" ? B.kind : A.kind);
+    return { q: mix(A.q, B.q, (x - A.s) / ((B.s - A.s) || 1)), kind };
+  }
+  // 흐름 속도: 천천히 붙고 → 낮고 일정하게 → 끝까지 급가속 없음
+  const flowShape = u => { const a = .28; return u <= 0 ? 0 : (u < a ? u * u / (2 * a) : u - a / 2) / (1 - a / 2); };
+
+  const NS = "http://www.w3.org/2000/svg";
+  let svg, layers = {}, flapClear = null, flapFired = false;
+  function mount(el) {
+    svg = el; svg.innerHTML = "";
+    ["under", "knot", "over"].forEach(k => {
+      const g = document.createElementNS(NS, "g");
+      ["r-base", "r-twist", "r-twist2"].forEach(c => { const p = document.createElementNS(NS, "path"); p.setAttribute("class", c); g.append(p); });
+      svg.append(g); layers[k] = g;
     });
     draw(0);
   }
-  // 꼬인 끈 결: 일정 간격마다 비스듬한 짧은 선
-  function twist(pts, step, w, shift) {
-    let out = "", acc = shift, prev = pts[0];
-    for (let i = 1; i < pts.length; i++) {
-      const cur = pts[i], seg = dist(prev, cur);
-      if (!seg) continue;
-      const tx = (cur[0] - prev[0]) / seg, ty = (cur[1] - prev[1]) / seg;
-      let t = step - acc;
-      while (t <= seg) {
-        const x = prev[0] + tx * t, y = prev[1] + ty * t;
-        // 진행 방향에서 약 55° 기울어진 짧은 선
-        const ax = (-ty * .82 + tx * .57) * w / 2, ay = (tx * .82 + ty * .57) * w / 2;
-        out += `M${(x - ax).toFixed(1)} ${(y - ay).toFixed(1)}L${(x + ax).toFixed(1)} ${(y + ay).toFixed(1)}`;
-        t += step;
+  // 실 위의 결(꼬임)은 실과 함께 이동하도록 '실 위의 위치'에 고정
+  function render(layer, runs) {
+    let base = "", t1 = "", t2 = "";
+    runs.forEach(run => {
+      if (run.length < 2) return;
+      base += "M" + run.map(r => r.q[0].toFixed(1) + " " + r.q[1].toFixed(1)).join("L");
+      for (let i = 1; i < run.length - 1; i++) {
+        const r = run[i]; if (r.tick == null) continue;
+        const a = run[i - 1].q, b = run[i + 1].q, d = dist(a, b) || 1, tx = (b[0] - a[0]) / d, ty = (b[1] - a[1]) / d;
+        const w = 11.5, ax = (-ty * .82 + tx * .57) * w / 2, ay = (tx * .82 + ty * .57) * w / 2;
+        const seg = `M${(r.q[0] - ax).toFixed(1)} ${(r.q[1] - ay).toFixed(1)}L${(r.q[0] + ax).toFixed(1)} ${(r.q[1] + ay).toFixed(1)}`;
+        r.tick ? t1 += seg : t2 += seg;
       }
-      acc = (acc + seg) % step;
-      prev = cur;
-    }
-    return out || "M0 0";
+    });
+    const [p0, p1, p2] = layers[layer].querySelectorAll("path");
+    p0.setAttribute("d", base || "M0 0"); p1.setAttribute("d", t1 || "M0 0"); p2.setAttribute("d", t2 || "M0 0");
   }
-  const set = (k, pts) => {
-    const [base, tw, tw2] = parts[k].querySelectorAll("path");
-    base.setAttribute("d", d(pts));
-    tw.setAttribute("d", twist(pts, 7, 11.5, 0));
-    tw2.setAttribute("d", twist(pts, 7, 11.5, 3.5));
-  };
-
-  // t: 경과 ms
+  function inFlap(q) { return q[1] < 383 - Math.abs(q[0] - 500) * .766 + 6 && q[0] > -10 && q[0] < 1010 && q[1] > -10; }
+  let lastSigma = 0;
   function draw(t) {
-    const pR = ease(clamp(t, 0, 1700));                 // 오른쪽 끈 끝이 당겨짐
-    const pRloop = ease(clamp(t, 120, 1800));           // 고리는 조금 늦게 따라옴
-    const pL = ease(clamp(t, 1200, 2500));              // 반대쪽 고리
-    const relax = ease(clamp(t, 1500, 2800));           // 풀린 끈이 부드럽게 펴짐
-    const h = easeIn(clamp(t, 2200, 3700));             // 가로 끈 미끄러짐
-    const v = easeIn(clamp(t, 2400, 3900));             // 세로 끈 미끄러짐
-    const sagH = 26 * ease(clamp(t, 2000, 2700)), sagV = 22 * ease(clamp(t, 2150, 2900));
-    const dy = 760 * h, dx = 1150 * v;
-    const J = [VX + sagV + dx, HY + sagH + dy];
-    const off = [J[0] - K[0], J[1] - K[1]];
-    set("H", band([-8, HY + dy], J, [1008, HY + dy]));
-    set("V", band([VX + dx, -6], J, [VX + dx, 660]));
-    // 오른쪽 끈 끝: 끝이 먼저 나가고 고리가 뒤따름
-    const a = strand(loopR, tailR, DR, LR, Math.min(pR, pRloop + .08), .4 + relax * .6).map(q => add(q, off));
-    set("A", a);
-    const b = strand(loopL, tailL, DL, LL, pL, .4 + relax * .6).map(q => add(q, off));
-    set("B", b);
-    // 중앙 매듭: 반대쪽 고리가 빠질 때 함께 느슨해짐
-    const ks = 1 - pL;
-    set("C", ks > .01 ? knot.map(q => add([K[0] + (q[0] - K[0]) * ks, K[1] + (q[1] - K[1]) * ks], off)) : [J, J]);
-    parts.C.style.opacity = ks > .01 ? 1 : 0;
-    svg.style.opacity = 1 - clamp(t, 3500, 3900);
+    const P = Math.min(1, t / TOTAL);
+    const tr = track(P);
+    const f = win(P, W.flow);
+    if (f > 0 && !exitPts) buildExit(tr.nodes[0].q);     // 흐름이 시작될 때의 끝 위치에서 출구 경로 생성
+    const sigma = f > 0 ? flowShape(f) * (tr.len + exitLen) : 0;       // 실이 경로를 따라 이동한 거리
+    lastSigma = sigma;
+    const STEP = 3.5, runs = { under: [], over: [] };
+    let cur = null, curKind = null, coversFlap = false, anyOnScreen = false;
+    const r = svg.getBoundingClientRect(), u = 1000 / (r.width || 1);
+    const scr = { x0: -r.left * u, y0: -r.top * u, x1: (innerWidth - r.left) * u, y1: (innerHeight - r.top) * u };
+    for (let m = 0, i = 0; m <= tr.len; m += STEP, i++) {
+      const pt = at(tr, m - sigma);
+      if (pt.kind === "hidden") { cur = null; continue; }
+      const k = pt.kind === "under" ? "under" : "over";
+      if (k !== curKind || !cur) { cur = []; runs[k].push(cur); curKind = k; if (runs[k].length > 1 || true) {} }
+      cur.push({ q: pt.q, tick: i % 2 === 0 ? (i % 4 === 0) : null });
+      if (inFlap(pt.q)) coversFlap = true;
+      if (pt.q[0] > scr.x0 - 20 && pt.q[0] < scr.x1 + 20 && pt.q[1] > scr.y0 - 20 && pt.q[1] < scr.y1 + 20) anyOnScreen = true;
+    }
+    render("under", runs.under);
+    render("over", runs.over);
+    // 중앙 매듭은 왼쪽 가닥 위로 완전히 겹칠 때까지 따로 그림
+    const kP = win(P, W.knot);
+    render("knot", kP < 1 ? [knotAt(P).map(q => ({ q: tr.off(q), tick: null }))] : []);
+    if (!flapFired && P > W.pull[1] && !coversFlap) { flapFired = true; flapClear && flapClear(); }
+    return { done: f >= 1 || (f > .05 && !anyOnScreen) };
   }
-  function play(duration = 3900) {
+  function play(onFlapClear) {
+    flapClear = onFlapClear;
     return new Promise(res => {
       const t0 = performance.now();
-      const tick = now => { const t = now - t0; draw(t); t < duration ? requestAnimationFrame(tick) : res(); };
+      const tick = now => {
+        const { done } = draw(now - t0);
+        if (!done) requestAnimationFrame(tick);
+        else { svg.innerHTML = ""; res(); }           // 마지막 꼬리가 화면 밖으로 나간 뒤에만 정리
+      };
       requestAnimationFrame(tick);
     });
   }
-  return { mount, draw, play };
+  return { mount, draw, play, TOTAL };
 })();
 Rope.mount(document.getElementById("rope"));
 
@@ -1042,68 +1176,69 @@ function finishIntro() {
 async function openEnvelope() {
   if (opened) return; opened = true;
   if (reduce) return finishIntro();
-  intro.classList.add("playing");
-  const env = $("env"), flap = $("flap"), holder = $("flapHolder"),
-        letter = $("letter"), top = $("sheetTop");
-
-  // ① 끈 끝이 당겨지며 리본이 스르륵 풀리고, 감겨 있던 끈이 미끄러져 벗겨짐 (0~3.9초)
-  const ropeDone = Rope.play(3900);
-
-  // ② 끈이 비켜나는 흐름을 이어받아 덮개가 열림 (3.3초부터 겹쳐서)
-  await sleep(3300);
-  const D = 1000;
-  holder.querySelector(".e-flap-drop").animate([{ opacity: 1 }, { opacity: 0 }], { duration: 300, fill: "forwards" });
-  anim(flap, [{ transform: "rotateX(0deg)" }, { transform: "rotateX(14deg)", offset: .18 }, { transform: "rotateX(180deg)" }],
-       { duration: D, easing: "ease-in-out" });
-  anim($("shadeOut"), [{ opacity: 0 }, { opacity: .35, offset: .5 }, { opacity: .35 }], { duration: D });
-  anim($("shadeIn"), [{ opacity: .4 }, { opacity: .4, offset: .5 }, { opacity: 0 }], { duration: D });
-  await sleep(D * .5); holder.style.zIndex = 1;
-  await sleep(D * .5 + 150);
-  await ropeDone;
-
-  // ③ 편지: 손으로 당겨 빼듯 위로 미끄러져 나옴
+  intro.classList.add("playing");                  // 인사·안내 문구가 먼저 사라짐
+  const env = $("env"), flap = $("flap"), holder = $("flapHolder"), letter = $("letter"), top = $("sheetTop");
+  const at = (ms, fn) => setTimeout(fn, ms);
   const H = env.offsetHeight;
-  await anim(letter, [{ transform: "translateY(0)" }, { transform: `translateY(${-H * .78}px)` }],
-             { duration: 1100, easing: "ease-in-out" });
+  const rise = -H * .97;                           // 편지 아랫변이 앞주머니 위로 완전히 나올 때까지                            // 편지가 올라오는 높이
+  let center = 0;
 
-  // ④ 봉투는 아래로 떨어지고, 편지는 화면 가운데로 다가옴
+  // ① 끈 끝이 당겨지며 리본이 풀리고, 풀린 실 전체가 끝을 따라 빠져나감 (약 7초, 진행률 기반)
+  let flapGo;
+  const flapReady = new Promise(r => (flapGo = r));
+  const ropeDone = Rope.play(() => flapGo());
+
+  // ② 덮개 위의 끈이 비켜난 순간을 기준으로 덮개가 열림 (실이 흘러나가는 동안 겹쳐서)
+  await flapReady;
+  const F = 900;
+  holder.querySelector(".e-flap-drop").animate([{ opacity: 1 }, { opacity: 0 }], { duration: 300, fill: "forwards" });
+  anim(flap, [{ transform: "rotateX(0deg)" }, { transform: "rotateX(12deg)", offset: .15 }, { transform: "rotateX(180deg)" }],
+       { duration: F, easing: "ease-in-out" });
+  anim($("shadeOut"), [{ opacity: 0 }, { opacity: .35, offset: .5 }, { opacity: .35 }], { duration: F });
+  anim($("shadeIn"), [{ opacity: .4 }, { opacity: .4, offset: .5 }, { opacity: 0 }], { duration: F });
+  at(F * .5, () => { holder.style.zIndex = 1; });
+
+  // ③ 덮개가 충분히 열리면 편지가 입구로 올라옴
+  await sleep(F * .65);
+  await anim(letter, [{ transform: "translateY(0)" }, { transform: `translateY(${rise}px)` }],
+             { duration: 1000, easing: "ease-in-out" });
+
+  // ④ 편지가 다 나온 뒤 봉투는 50px 내려가며 사라지고, 편지는 가운데로
   env.querySelectorAll("[data-fall]").forEach(el =>
-    el.animate([{ translate: "0 0", rotate: "0deg", opacity: 1 }, { translate: "0 110vh", rotate: "0deg", opacity: 1 }],
-               { duration: 900, easing: "ease-in", fill: "forwards" }));
-  const r = letter.getBoundingClientRect();
-  const dy = window.innerHeight / 2 - (r.top) ; // 펼친 뒤 가운데가 편지 윗변
-  await anim(letter, [{ transform: `translateY(${-H * .78}px)` }, { transform: `translateY(${-H * .78 + dy}px)` }],
-             { duration: 800, easing: "ease-in-out" });
+    el.animate([{ translate: "0 0", opacity: 1 }, { translate: "0 50px", opacity: 0 }],
+               { duration: 650, easing: "ease-in-out", fill: "forwards" }));
+  const r0 = letter.getBoundingClientRect();
+  center = window.innerHeight / 2 - r0.top;
+  anim(letter, [{ transform: `translateY(${rise}px)` }, { transform: `translateY(${rise + center}px)` }],
+       { duration: 750, easing: "ease-in-out" });
 
-  // ⑤ 접힌 편지를 펼침
-  const U = 900;
-  anim(top.querySelector(".e-fold-shade.out"), [{ opacity: 0 }, { opacity: 1, offset: .5 }, { opacity: 1 }], { duration: U });
-  anim(top.querySelector(".e-fold-shade.in"), [{ opacity: 1 }, { opacity: 1, offset: .5 }, { opacity: 0 }], { duration: U });
-  await anim(top, [{ transform: "rotateX(-180deg)" }, { transform: "rotateX(0deg)" }],
-             { duration: U, easing: "ease-in-out" });
-  await sleep(350);
+  // ⑤ 펼침 (접힌 선 기준 회전 + 그림자)
+  await sleep(150);
+  anim(top.querySelector(".e-fold-shade.out"), [{ opacity: 0 }, { opacity: 1, offset: .5 }, { opacity: 1 }], { duration: 750 });
+  anim(top.querySelector(".e-fold-shade.in"), [{ opacity: 1 }, { opacity: 1, offset: .5 }, { opacity: 0 }], { duration: 750 });
+  anim(top, [{ transform: "rotateX(-180deg)" }, { transform: "rotateX(0deg)" }], { duration: 750, easing: "ease-in-out" });
+  await sleep(500);
+  await ropeDone;                                    // 실이 아직 화면에 있으면 끝까지 기다림
 
-  // ⑥ 편지지의 '붉은 실' 글씨가 그대로 초대장 제목 자리로 이어짐
+  // 4.05~4.75초: 편지 제목이 본문 제목 자리로 이어짐
   const h1 = document.querySelector(".hero h1");
   const t = letter.querySelector(".e-title");
   h1.classList.add("handoff");
   document.body.classList.remove("locked");
   window.scrollTo(0, 0);
   document.body.classList.add("opened");
-  const from = t.getBoundingClientRect(), to = h1.getBoundingClientRect();
+  const fromR = t.getBoundingClientRect(), toR = h1.getBoundingClientRect();
   const fs0 = parseFloat(getComputedStyle(t).fontSize), fs1 = parseFloat(getComputedStyle(h1).fontSize);
   const fly = document.createElement("div");
   fly.className = "title-fly"; fly.textContent = t.textContent;
-  Object.assign(fly.style, { left: from.left + from.width / 2 + "px", top: from.top + from.height / 2 + "px", fontSize: fs0 + "px" });
   document.body.append(fly);
   t.style.visibility = "hidden";
-  const F = 1000;
-  letter.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 700, easing: "ease-in-out", fill: "forwards" });
-  intro.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 800, easing: "ease-in", fill: "forwards" });
+  letter.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 450, easing: "ease-in-out", fill: "forwards" });
+  intro.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 500, easing: "ease-in-out", fill: "forwards" });
   await anim(fly, [
-      { left: from.left + from.width / 2 + "px", top: from.top + from.height / 2 + "px", fontSize: fs0 + "px", color: "#3a2a1f" },
-      { left: to.left + to.width / 2 + "px", top: to.top + to.height / 2 + "px", fontSize: fs1 + "px", color: getComputedStyle(h1).color }],
-    { duration: F, easing: "ease-in-out" });
+      { left: fromR.left + fromR.width / 2 + "px", top: fromR.top + fromR.height / 2 + "px", fontSize: fs0 + "px", color: getComputedStyle(t).color },
+      { left: toR.left + toR.width / 2 + "px", top: toR.top + toR.height / 2 + "px", fontSize: fs1 + "px", color: getComputedStyle(h1).color }],
+    { duration: 700, easing: "ease-in-out" });
   h1.style.transition = "none";
   h1.classList.remove("handoff");
   fly.remove();
