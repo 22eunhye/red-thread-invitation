@@ -10,7 +10,7 @@
 <meta property="og:description" content="친구의 친구를 만나는 밤. 레드를 입고 와주세요.">
 <meta property="og:image" content="https://YOUR-ID.github.io/YOUR-REPO/og.png">
 <meta property="og:type" content="website">
-<meta name="theme-color" content="#b3202c">
+<meta name="theme-color" content="#f1e6d2">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -470,34 +470,6 @@
   .e-string { left: calc(var(--w) * -0.0144); top: calc(var(--w) * -0.0144 * 1.0); width: calc(var(--w) * 1.0287); height: auto;
     z-index: 6; pointer-events: none; filter: drop-shadow(0 2px 2px rgba(40,0,0,.35)); }
 
-  /* ================= 배경 레드(#b3202c) 테마 ================= */
-  :root { --paper: #b3202c; --paper-2: rgba(255,245,230,.08); --ink: #fbf3e6; --ink-soft: rgba(251,243,230,.78);
-          --red: #fbf3e6; --red-soft: rgba(251,243,230,.15); --line: rgba(251,243,230,.38); }
-  body { background: #8a1720; }
-  .card { background-color: #b3202c;
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='p'><feTurbulence type='fractalNoise' baseFrequency='1.2' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .10 0'/></filter><rect width='100%' height='100%' filter='url(%23p)'/></svg>"),
-      radial-gradient(ellipse at 50% 0%, rgba(255,255,255,.06), transparent 60%); }
-  .thread { stroke: #fbf3e6; filter: drop-shadow(0 2px 2px rgba(60,0,5,.35)); }
-  .hero h1, h2, .date-big, .place-name, .item strong { color: var(--ink); }
-  .soft, .date-small, .hero .when, .board-title, .nick-form small, footer { color: var(--ink-soft); }
-  .fee div, .account { background: rgba(255,245,230,.08); border-color: rgba(251,243,230,.45); box-shadow: none; }
-  .fee small, .account p { color: var(--ink); }
-  .account .who { color: var(--ink-soft); }
-  .btn { color: var(--ink); border-color: rgba(251,243,230,.6); }
-  .btn.primary { background: #fbf3e6; border-color: #fbf3e6; color: #b3202c; font-weight: 700; }
-  .award { background: rgba(255,245,230,.08); box-shadow: 0 0 0 4px #b3202c, 0 0 0 5px rgba(251,243,230,.7); border-color: rgba(251,243,230,.7); }
-  .nick-board { background: rgba(255,245,230,.07); border-color: rgba(251,243,230,.3); }
-  .nick-form input { color: var(--ink); border-bottom-color: rgba(251,243,230,.6); }
-  .nick-form input::placeholder { color: rgba(251,243,230,.5); }
-  .nick-msg.ok, .nick-msg.err { color: #fff3dc; }
-  .chips span { color: var(--ink); border-color: rgba(251,243,230,.5); }
-  .item { border-bottom-color: rgba(251,243,230,.2); }
-  .flow li { border-bottom-color: rgba(251,243,230,.2); }
-  .info-block + .info-block { border-top-color: rgba(251,243,230,.35); }
-  .toast { background: #3d0a0f; color: #fbf3e6; }
-  a { color: var(--ink); }
-  .red-word { color: #fbf3e6; }
-
   /* 진실 혹은 거짓 주제 설명 */
   .topics { list-style: none; margin-top: 12px; display: grid; gap: 10px; }
   .topics li { display: grid; gap: 3px; padding-left: 12px; border-left: 2px solid rgba(251,243,230,.55); }
@@ -542,6 +514,53 @@
   /* 준비물 항목 하나씩 등장 */
   .item.reveal { transition-duration: .8s; }
   .fee div { max-width: none; padding: 16px 10px; }
+
+  /* 편지지도 레드로 통일 */
+  .e-half { background: #b3202c linear-gradient(180deg, #bd2833, #a91d29);
+            box-shadow: inset 0 0 0 1px rgba(255,235,220,.18); }
+  .e-bottom { box-shadow: inset 0 0 0 1px rgba(255,235,220,.18), 0 3px 10px rgba(50,0,6,.45); }
+  .e-top-out { box-shadow: inset 0 0 0 1px rgba(255,235,220,.18), 0 1px 4px rgba(50,0,6,.35); }
+  .e-title { color: #fbf3e6; }
+  .e-fold-shade.in { background: linear-gradient(0deg, rgba(40,0,5,.45), rgba(40,0,5,0) 70%); }
+  .e-fold-shade.out { background: rgba(40,0,5,.3); }
+
+  /* 편지 안쪽은 다시 크림색, 바깥(접힌 겉면)만 레드 */
+  .e-bottom, .e-top-in { background: #f8f0e2 linear-gradient(180deg, #fbf5ea, #f1e6d3); }
+  .e-bottom { box-shadow: 0 3px 10px rgba(50,0,6,.4); }
+  .e-top-in { box-shadow: none; }
+  .e-title { color: #3a2a1f; }
+  .e-fold-shade.in { background: linear-gradient(0deg, rgba(60,30,10,.35), rgba(60,30,10,0) 70%); }
+
+  /* 편지 제목 → 초대장 제목 이어지기 */
+  .hero h1.handoff { opacity: 0 !important; }
+  .title-fly { position: fixed; z-index: 40; transform: translate(-50%, -50%); white-space: nowrap; pointer-events: none;
+               font-family: "Noto Serif KR", var(--serif); font-weight: 500; letter-spacing: .14em; line-height: 1.3; padding-left: .14em; }
+
+  /* 제목이 날아가 자리 잡는 동안 나머지 표지 요소는 조금 늦게 */
+  body.opened .hero > *:nth-child(1) { transition-delay: .5s; }
+  body.opened .hero > *:nth-child(3) { transition-delay: .75s; }
+  body.opened .hero > *:nth-child(4) { transition-delay: .9s; }
+  body.opened .hero > *:nth-child(5) { transition-delay: 1.05s; }
+
+  /* 편지지 겉면도 크림색 (편지지 전체 크림) */
+  .e-top-out { background: #f6eddd linear-gradient(180deg, #f9f2e5, #eee2cd); box-shadow: 0 1px 4px rgba(50,0,6,.3); }
+  .e-fold-shade.out { background: rgba(60,30,10,.25); }
+
+  /* 편지지: 앤틱 양피지 색 (이전 초대장 배경과 동일) */
+  .e-bottom, .e-top-in, .e-top-out {
+    background-color: #f1e6d2;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .42  0 0 0 0 .30  0 0 0 0 .16  0 0 0 .17 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"), linear-gradient(180deg, #f4ead8, #eddfc5);
+  }
+  .e-bottom::before, .e-top-in::before, .e-top-out::before {
+    content: ""; position: absolute; inset: 6px; border: 1px solid #cdb894; outline: 1px solid #cdb894; outline-offset: 2px; pointer-events: none; }
+  .e-bottom::before { top: 0; } .e-top-in::before, .e-top-out::before { bottom: 0; }
+  .e-title { color: #3a2a1f; }
+
+  /* 양피지 배경으로 복귀 후 보정 */
+  .topics li { border-left-color: rgba(179,32,44,.5); }
+  .postmark { border-color: rgba(179,32,44,.75); color: rgba(179,32,44,.85); }
+  .stamp-wrap { filter: drop-shadow(0 5px 8px rgba(80,40,10,.25)); }
+  .award.stamp { background-color: #fbf6ec; }
 </style>
 </head>
 <body class="locked">
@@ -886,15 +905,12 @@ async function openEnvelope() {
 
   // ① 실: 리본 매듭이 당겨져 풀리고, 감겨 있던 끈이 봉투 가장자리로 빠져나감
   const piece = k => str.querySelector(`[data-piece="${k}"]`);
-  anim(env, [{ transform: "rotate(0)" }, { transform: "rotate(-.7deg)" }, { transform: "rotate(.35deg)" }, { transform: "rotate(0)" }],
-       { duration: 600, easing: "ease-out" });
   await anim(piece("bow"), [
-      { transform: "none", opacity: 1 },
-      { transform: "scale(1.05, .9) rotate(-3deg)", opacity: 1, offset: .35 },
-      { transform: "translate(3%, 4%) scale(.3, .45) rotate(12deg)", opacity: 0 }],
-    { duration: 650, easing: "cubic-bezier(.55,0,.85,.35)" });
+      { transform: "scale(1)", opacity: 1 },
+      { transform: "scale(.4)", opacity: 0 }],
+    { duration: 600, easing: "ease-in-out" });
   const pull = (k, from, to, delay) => piece(k).animate([{ clipPath: from }, { clipPath: to }],
-    { duration: 420, delay, easing: "cubic-bezier(.6,0,.9,.4)", fill: "forwards" }).finished;
+    { duration: 450, delay, easing: "ease-in-out", fill: "forwards" }).finished;
   await Promise.all([
     pull("right",  "inset(56.6% 0 39.7% 65.5%)",   "inset(56.6% 0 39.7% 100%)", 0),
     pull("bottom", "inset(82.9% 49.2% 0 48.6%)",   "inset(100% 49.2% 0 48.6%)", 90),
@@ -906,47 +922,58 @@ async function openEnvelope() {
   // ② 덮개: 경첩을 축으로 천천히 젖혀짐 (90°를 넘는 순간 편지 뒤로)
   const D = 950;
   holder.querySelector(".e-flap-drop").animate([{ opacity: 1 }, { opacity: 0 }], { duration: 250, fill: "forwards" });
-  anim(flap, [{ transform: "rotateX(0deg)", easing: "cubic-bezier(.5,0,.9,.6)" },
-              { transform: "rotateX(90deg)", offset: .42, easing: "cubic-bezier(.1,.4,.3,1)" },
-              { transform: "rotateX(180deg)" }], { duration: D });
-  anim($("shadeOut"), [{ opacity: 0 }, { opacity: .35, offset: .42 }, { opacity: .35 }], { duration: D });
-  anim($("shadeIn"), [{ opacity: .4 }, { opacity: .4, offset: .42 }, { opacity: 0 }], { duration: D });
-  await sleep(D * .42); holder.style.zIndex = 1;
-  await sleep(D * .58 + 120);
+  anim(flap, [{ transform: "rotateX(0deg)" }, { transform: "rotateX(180deg)" }], { duration: D, easing: "ease-in-out" });
+  anim($("shadeOut"), [{ opacity: 0 }, { opacity: .35, offset: .5 }, { opacity: .35 }], { duration: D });
+  anim($("shadeIn"), [{ opacity: .4 }, { opacity: .4, offset: .5 }, { opacity: 0 }], { duration: D });
+  await sleep(D * .5); holder.style.zIndex = 1;
+  await sleep(D * .5 + 150);
 
   // ③ 편지: 손으로 당겨 빼듯 위로 미끄러져 나옴
   const H = env.offsetHeight;
-  await anim(letter, [{ transform: "translateY(0) rotate(0)" },
-                      { transform: `translateY(${-H * .45}px) rotate(-1.2deg)`, offset: .55 },
-                      { transform: `translateY(${-H * .78}px) rotate(.3deg)` }],
-             { duration: 1100, easing: "cubic-bezier(.45,.05,.25,1)" });
+  await anim(letter, [{ transform: "translateY(0)" }, { transform: `translateY(${-H * .78}px)` }],
+             { duration: 1100, easing: "ease-in-out" });
 
   // ④ 봉투는 아래로 떨어지고, 편지는 화면 가운데로 다가옴
   env.querySelectorAll("[data-fall]").forEach(el =>
-    el.animate([{ translate: "0 0", rotate: "0deg", opacity: 1 }, { translate: "0 110vh", rotate: "7deg", opacity: .9 }],
-               { duration: 900, easing: "cubic-bezier(.55,0,.95,.45)", fill: "forwards" }));
+    el.animate([{ translate: "0 0", rotate: "0deg", opacity: 1 }, { translate: "0 110vh", rotate: "0deg", opacity: 1 }],
+               { duration: 900, easing: "ease-in", fill: "forwards" }));
   const r = letter.getBoundingClientRect();
   const dy = window.innerHeight / 2 - (r.top) ; // 펼친 뒤 가운데가 편지 윗변
-  await anim(letter, [{ transform: `translateY(${-H * .78}px) rotate(.3deg) scale(1)`, boxShadow: "none" },
-                      { transform: `translateY(${-H * .78 + dy}px) rotate(0) scale(1.12)` }],
-             { duration: 750, easing: "cubic-bezier(.2,.7,.2,1)" });
+  await anim(letter, [{ transform: `translateY(${-H * .78}px)` }, { transform: `translateY(${-H * .78 + dy}px)` }],
+             { duration: 800, easing: "ease-in-out" });
 
   // ⑤ 접힌 편지를 펼침
   const U = 900;
   anim(top.querySelector(".e-fold-shade.out"), [{ opacity: 0 }, { opacity: 1, offset: .5 }, { opacity: 1 }], { duration: U });
   anim(top.querySelector(".e-fold-shade.in"), [{ opacity: 1 }, { opacity: 1, offset: .5 }, { opacity: 0 }], { duration: U });
   await anim(top, [{ transform: "rotateX(-180deg)" }, { transform: "rotateX(0deg)" }],
-             { duration: U, easing: "cubic-bezier(.35,0,.2,1)" });
+             { duration: U, easing: "ease-in-out" });
   await sleep(350);
 
-  // ⑥ 편지 속으로 들어가듯 초대장 등장
+  // ⑥ 편지지의 '붉은 실' 글씨가 그대로 초대장 제목 자리로 이어짐
+  const h1 = document.querySelector(".hero h1");
+  const t = letter.querySelector(".e-title");
+  h1.classList.add("handoff");
   document.body.classList.remove("locked");
-  document.body.classList.add("opened");
   window.scrollTo(0, 0);
-  anim(letter, [{ transform: `translateY(${-H * .78 + dy}px) scale(1.12)`, opacity: 1 },
-                { transform: `translateY(${-H * .78 + dy}px) scale(2.6)`, opacity: 0 }],
-       { duration: 750, easing: "cubic-bezier(.5,0,.75,0)" });
-  await anim(intro, [{ opacity: 1 }, { opacity: 0 }], { duration: 750, easing: "ease-in" });
+  document.body.classList.add("opened");
+  const from = t.getBoundingClientRect(), to = h1.getBoundingClientRect();
+  const fs0 = parseFloat(getComputedStyle(t).fontSize), fs1 = parseFloat(getComputedStyle(h1).fontSize);
+  const fly = document.createElement("div");
+  fly.className = "title-fly"; fly.textContent = t.textContent;
+  Object.assign(fly.style, { left: from.left + from.width / 2 + "px", top: from.top + from.height / 2 + "px", fontSize: fs0 + "px" });
+  document.body.append(fly);
+  t.style.visibility = "hidden";
+  const F = 1000;
+  letter.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 700, easing: "ease-in-out", fill: "forwards" });
+  intro.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 800, easing: "ease-in", fill: "forwards" });
+  await anim(fly, [
+      { left: from.left + from.width / 2 + "px", top: from.top + from.height / 2 + "px", fontSize: fs0 + "px", color: "#3a2a1f" },
+      { left: to.left + to.width / 2 + "px", top: to.top + to.height / 2 + "px", fontSize: fs1 + "px", color: getComputedStyle(h1).color }],
+    { duration: F, easing: "ease-in-out" });
+  h1.style.transition = "none";
+  h1.classList.remove("handoff");
+  fly.remove();
   intro.style.display = "none";
 }
 stage.addEventListener("click", openEnvelope);
