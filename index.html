@@ -902,15 +902,15 @@ loadNicknames();
 const Rope = (() => {
   /* 봉투 기준 좌표 1000 × 654. 매듭 중심은 가로 49.7%, 세로 59%.
      전체 진행률 0~1을 기준으로 각 동작의 시작·끝을 잡음 → TOTAL만 바꾸면 전부 같이 늘어나고 줄어듦 */
-  const TOTAL = 7200;
+  const TOTAL = 3600;
   const W = {
     tension: [0, .085],        // 0~0.6초   느슨한 끝이 펴짐
     lead:    [0, .34],         // 끈 끝이 먼저 움직임
     pull:    [.055, .375],     // 0.4~2.7초 고리가 좁아지며 매듭을 통과
-    openL:   [.19, .42],       // 반대쪽 고리는 늦게 힘을 잃고 펴짐
-    knot:    [.25, .40],       // 중앙 얽힘이 느슨해짐
-    slack:   [.32, .60],       // 2.3~4.3초 감긴 끈의 장력이 풀림
-    flow:    [.50, 1],         // 3.6~7.2초 끝을 따라 실 전체가 빠져나감
+    openL:   [.15, .36],       // 반대쪽 고리는 조금 늦게 힘을 잃고 느슨해짐
+    knot:    [.22, .37],       // 중앙 얽힘이 느슨해짐
+    slack:   [.30, .55],       // 감긴 끈의 장력이 풀림
+    flow:    [.38, 1],         // 매듭이 풀리자마자 끝을 따라 실 전체가 한 가닥으로 빠져나감
   };
   const K = [497, 386], HY = 386, VX = 497;
   const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
@@ -1021,71 +1021,52 @@ const Rope = (() => {
     return out;
   }
 
-  /* 한 가닥의 경로(트랙): 당겨진 끝 → 오른쪽 가닥 → 매듭 → 가로끈 오른쪽 → (봉투 뒤) → 가로끈 왼쪽
-     → 세로끈 아래 → (봉투 뒤) → 세로끈 위 → 왼쪽 가닥 → 마지막 꼬리.
-     실은 이 경로를 따라 끝 쪽으로 미끄러지고, 끝 앞에는 화면 밖으로 이어지는 출구 경로가 붙음 */
+  /* 리본이 풀린 뒤: 실은 처음부터 끝까지 '한 가닥'.
+     당겨진 오른쪽 끝이 계속 빠져나가고, 매듭 지점으로 나머지 실이 차례로 끌려 들어와 같은 길로 이어져 나감.
+     끌려 들어오는 순서: 왼쪽 가닥 → 가로끈 오른쪽 → 세로끈 위 → 가로끈 왼쪽 → 세로끈 아래(마지막 꼬리) */
   let exitPts = null, exitLen = 0;
-  function buildExit(start) {
-    // 화면 밖까지: 실제 뷰포트 크기를 봉투 좌표로 환산
+  function buildExit(start, dir) {
     const r = svg.getBoundingClientRect(), u = 1000 / r.width;
     const maxX = (innerWidth - r.left) * u + 120, maxY = (innerHeight - r.top) * u + 120;
-    const D = [.5, .866], Pp = [-D[1], D[0]], pts = [start];
+    const D = dir, Pp = [-D[1], D[0]], pts = [start];
     for (let s = 6; ; s += 6) {
-      const q = [start[0] + D[0] * s + Pp[0] * 24 * Math.sin(s / 260), start[1] + D[1] * s + Pp[1] * 24 * Math.sin(s / 260)];
+      const w = 22 * Math.sin(s / 240);
+      const q = [start[0] + D[0] * s + Pp[0] * w, start[1] + D[1] * s + Pp[1] * w + s * s / 9000];
       pts.push(q);
       if (q[0] > maxX || q[1] > maxY) break;
     }
     exitPts = pts; exitLen = length(pts);
   }
-  function track(P) {
+  // 경로 위 거리 d의 위치
+  function pointAt(pts, d) {
+    if (d <= 0) return pts[0];
+    let acc = 0;
+    for (let i = 1; i < pts.length; i++) {
+      const sg = dist(pts[i], pts[i - 1]);
+      if (acc + sg >= d) return mix(pts[i - 1], pts[i], (d - acc) / (sg || 1));
+      acc += sg;
+    }
+    return pts[pts.length - 1];
+  }
+  function shapes(P) {
     const slack = ease(win(P, W.slack));
     const drift = ease(win(P, [.26, .42]));
-    const J = [VX + 14 * slack + 10 * drift, HY + 20 * slack + 8 * drift];   // 매듭은 풀린 뒤 당기는 쪽으로 조금
+    const J = [VX + 14 * slack + 10 * drift, HY + 20 * slack + 8 * drift];
     const off = q => [q[0] + J[0] - K[0], q[1] + J[1] - K[1]];
     const H = quad([-8, HY], J, [1008, HY]), V = quad([VX, -6], J, [VX, 660]);
-    const mid = n => Math.round(n / 2);
-    const segs = [
-      { pts: strandR(P).map(off).reverse(), kind: "over" },
-      { pts: H.slice(mid(H.length - 1)), kind: "under" },
-      { pts: [H[H.length - 1], H[0]], kind: "hidden", len: 70 },
-      { pts: H.slice(0, mid(H.length - 1) + 1), kind: "under" },
-      { pts: V.slice(mid(V.length - 1)), kind: "under" },
-      { pts: [V[V.length - 1], V[0]], kind: "hidden", len: 70 },
-      { pts: V.slice(0, mid(V.length - 1) + 1), kind: "under" },
-      { pts: strandL(P).map(off).reverse(), kind: "over" },
+    const m = Math.round((H.length - 1) / 2);
+    const R = strandR(P).map(off);                         // 매듭 → 끝
+    const feeders = [
+      { pts: strandL(P).map(off).reverse(), layer: "over" },   // 매듭 → 왼쪽 끝
+      { pts: H.slice(m), layer: "under" },                     // 매듭 → 오른쪽 가장자리
+      { pts: V.slice(0, m + 1).reverse(), layer: "under" },    // 매듭 → 위쪽 가장자리
+      { pts: H.slice(0, m + 1).reverse(), layer: "under" },    // 매듭 → 왼쪽 가장자리
+      { pts: V.slice(m), layer: "under" },                     // 매듭 → 아래쪽 가장자리 (마지막)
     ];
-    // 누적 길이표
-    const nodes = []; let acc = 0;
-    segs.forEach(sg => {
-      const L = sg.len != null ? sg.len : length(sg.pts);
-      const total = length(sg.pts) || 1;
-      let g = 0;
-      sg.pts.forEach((q, i) => {
-        if (i) g += dist(q, sg.pts[i - 1]);
-        nodes.push({ q, s: acc + (sg.len != null ? (g / total) * L : g), kind: sg.kind });
-      });
-      acc += L;
-    });
-    return { nodes, len: acc, J, off };
+    feeders.forEach(f => f.len = length(f.pts));
+    return { J, off, R, feeders };
   }
-  function at(tr, x) {                          // 트랙 좌표 x의 위치 (x<0 은 출구 경로)
-    if (x < 0) {
-      let d = -x, acc = 0;
-      for (let i = 1; i < exitPts.length; i++) {
-        const sg = dist(exitPts[i], exitPts[i - 1]);
-        if (acc + sg >= d) return { q: mix(exitPts[i - 1], exitPts[i], (d - acc) / sg), kind: "over" };
-        acc += sg;
-      }
-      return { q: exitPts[exitPts.length - 1], kind: "over" };
-    }
-    const ns = tr.nodes; let lo = 0, hi = ns.length - 1;
-    while (hi - lo > 1) { const m = (lo + hi) >> 1; ns[m].s <= x ? lo = m : hi = m; }
-    const A = ns[lo], B = ns[hi];
-    const kind = A.kind === "hidden" && B.kind === "hidden" ? "hidden" : (A.kind === "hidden" ? B.kind : A.kind);
-    return { q: mix(A.q, B.q, (x - A.s) / ((B.s - A.s) || 1)), kind };
-  }
-  // 흐름 속도: 천천히 붙고 → 낮고 일정하게 → 끝까지 급가속 없음
-  const flowShape = u => { const a = .28; return u <= 0 ? 0 : (u < a ? u * u / (2 * a) : u - a / 2) / (1 - a / 2); };
+  const flowShape = u => { const a = .15; return u <= 0 ? 0 : (u < a ? u * u / (2 * a) : u - a / 2) / (1 - a / 2); };
 
   const NS = "http://www.w3.org/2000/svg";
   let svg, layers = {}, flapClear = null, flapFired = false;
@@ -1098,53 +1079,76 @@ const Rope = (() => {
     });
     draw(0);
   }
-  // 실 위의 결(꼬임)은 실과 함께 이동하도록 '실 위의 위치'에 고정
+  // run: [{q, m}] — m은 실 위의 위치. 꼬임 결은 m에 고정되어 실과 함께 움직임
   function render(layer, runs) {
     let base = "", t1 = "", t2 = "";
     runs.forEach(run => {
       if (run.length < 2) return;
       base += "M" + run.map(r => r.q[0].toFixed(1) + " " + r.q[1].toFixed(1)).join("L");
       for (let i = 1; i < run.length - 1; i++) {
-        const r = run[i]; if (r.tick == null) continue;
+        const r = run[i];
+        const k = Math.floor(r.m / 3.5);
+        if (k % 2) continue;
         const a = run[i - 1].q, b = run[i + 1].q, d = dist(a, b) || 1, tx = (b[0] - a[0]) / d, ty = (b[1] - a[1]) / d;
         const w = 11.5, ax = (-ty * .82 + tx * .57) * w / 2, ay = (tx * .82 + ty * .57) * w / 2;
         const seg = `M${(r.q[0] - ax).toFixed(1)} ${(r.q[1] - ay).toFixed(1)}L${(r.q[0] + ax).toFixed(1)} ${(r.q[1] + ay).toFixed(1)}`;
-        r.tick ? t1 += seg : t2 += seg;
+        k % 4 === 0 ? t1 += seg : t2 += seg;
       }
     });
     const [p0, p1, p2] = layers[layer].querySelectorAll("path");
     p0.setAttribute("d", base || "M0 0"); p1.setAttribute("d", t1 || "M0 0"); p2.setAttribute("d", t2 || "M0 0");
   }
-  function inFlap(q) { return q[1] < 383 - Math.abs(q[0] - 500) * .766 + 6 && q[0] > -10 && q[0] < 1010 && q[1] > -10; }
-  let lastSigma = 0;
+  const STEP = 3.5;
+  // 경로 pts를 거리 a~b 구간에서 STEP 간격으로, 실 위치 m0+거리 를 붙여 샘플링
+  function sample(pts, a, b, mOf) {
+    const out = [];
+    if (b - a < 1) return out;
+    for (let d = a; d < b; d += STEP) out.push({ q: pointAt(pts, d), m: mOf(d) });
+    out.push({ q: pointAt(pts, b), m: mOf(b) });
+    return out;
+  }
   function draw(t) {
     const P = Math.min(1, t / TOTAL);
-    const tr = track(P);
+    const S = shapes(P);
+    const Rrev = S.R.slice().reverse();                    // 끝 → 매듭
+    const LRs = length(Rrev);
+    const feedTotal = S.feeders.reduce((a, f) => a + f.len, 0);
     const f = win(P, W.flow);
-    if (f > 0 && !exitPts) buildExit(tr.nodes[0].q);     // 흐름이 시작될 때의 끝 위치에서 출구 경로 생성
-    const sigma = f > 0 ? flowShape(f) * (tr.len + exitLen) : 0;       // 실이 경로를 따라 이동한 거리
-    lastSigma = sigma;
-    const STEP = 3.5, runs = { under: [], over: [] };
-    let cur = null, curKind = null, coversFlap = false, anyOnScreen = false;
-    const r = svg.getBoundingClientRect(), u = 1000 / (r.width || 1);
-    const scr = { x0: -r.left * u, y0: -r.top * u, x1: (innerWidth - r.left) * u, y1: (innerHeight - r.top) * u };
-    for (let m = 0, i = 0; m <= tr.len; m += STEP, i++) {
-      const pt = at(tr, m - sigma);
-      if (pt.kind === "hidden") { cur = null; continue; }
-      const k = pt.kind === "under" ? "under" : "over";
-      if (k !== curKind || !cur) { cur = []; runs[k].push(cur); curKind = k; if (runs[k].length > 1 || true) {} }
-      cur.push({ q: pt.q, tick: i % 2 === 0 ? (i % 4 === 0) : null });
-      if (inFlap(pt.q)) coversFlap = true;
-      if (pt.q[0] > scr.x0 - 20 && pt.q[0] < scr.x1 + 20 && pt.q[1] > scr.y0 - 20 && pt.q[1] < scr.y1 + 20) anyOnScreen = true;
-    }
-    render("under", runs.under);
-    render("over", runs.over);
-    // 중앙 매듭은 왼쪽 가닥 위로 완전히 겹칠 때까지 따로 그림
+    if (f > 0 && !exitPts) buildExit(Rrev[0], unit(Rrev[1], Rrev[0]));
+    const total = feedTotal + LRs + (exitPts ? exitLen : 0);
+    const sigma = f > 0 ? flowShape(f) * total : 0;        // 당겨져 나간 실의 길이
+
+    // 1) 당겨진 가닥: 출구 경로(앞) + 오른쪽 가닥. 뒤에 실이 남아 있는 동안은 매듭까지 이어짐
+    const lead = exitPts ? exitPts.slice().reverse().concat(Rrev.slice(1)) : Rrev;   // 출구 끝 → … → 매듭
+    const leadOffset = exitPts ? exitLen : 0;              // lead 경로에서 원래 끝이 있는 거리
+    const startD = leadOffset - sigma;                      // 현재 끝의 위치
+    const tailBehind = Math.max(0, sigma - feedTotal);      // 마지막 꼬리가 매듭을 지나 이동한 거리
+    const endD = leadOffset + LRs - tailBehind;
+    const runsOver = [], runsUnder = [];
+    const leadRun = sample(lead, Math.max(0, startD), endD, d => d - startD);
+    if (leadRun.length) runsOver.push(leadRun);
+
+    // 2) 끌려 들어오는 실: 차례로 바깥쪽 끝이 매듭 쪽으로 줄어듦
+    let used = Math.min(sigma, feedTotal), mBase = LRs + (exitPts ? 0 : 0);
+    let coversFlap = false;
+    S.feeders.forEach(fd => {
+      const take = Math.min(fd.len, used); used -= take;
+      const visible = fd.len - take;
+      if (visible > .5) {
+        const run = sample(fd.pts, 0, visible, d => mBase + d + take);
+        (fd.layer === "over" ? runsOver : runsUnder).push(run);
+        run.forEach(r => { if (inFlap(r.q)) coversFlap = true; });
+      }
+      mBase += fd.len;
+    });
+    render("under", runsUnder);
+    render("over", runsOver);
     const kP = win(P, W.knot);
-    render("knot", kP < 1 ? [knotAt(P).map(q => ({ q: tr.off(q), tick: null }))] : []);
+    render("knot", kP < 1 ? [knotAt(P).map((q, i) => ({ q: S.off(q), m: i * STEP }))] : []);
     if (!flapFired && P > W.pull[1] && !coversFlap) { flapFired = true; flapClear && flapClear(); }
-    return { done: f >= 1 || (f > .05 && !anyOnScreen) };
+    return { done: f >= 1 };
   }
+  function inFlap(q) { return q[1] < 383 - Math.abs(q[0] - 500) * .766 - 4 && q[0] > -10 && q[0] < 1010 && q[1] > -10; }
   function play(onFlapClear) {
     flapClear = onFlapClear;
     return new Promise(res => {
@@ -1152,7 +1156,7 @@ const Rope = (() => {
       const tick = now => {
         const { done } = draw(now - t0);
         if (!done) requestAnimationFrame(tick);
-        else { svg.innerHTML = ""; res(); }           // 마지막 꼬리가 화면 밖으로 나간 뒤에만 정리
+        else { svg.innerHTML = ""; res(); }             // 마지막 꼬리가 화면 밖으로 나간 뒤에만 정리
       };
       requestAnimationFrame(tick);
     });
